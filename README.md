@@ -92,3 +92,4 @@ python app.py
 - 图片存储路径
 - 数据库路径
 - 部署：`/root/0-code/avlib-deploy` 下的 `start.sh`/`stop.sh`/`status.sh`，watchdog 每300秒检测GitHub新提交并自动部署
+
