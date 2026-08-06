@@ -1,7 +1,6 @@
 // DOM元素
 const avIdsInput = document.getElementById('avIds');
 const searchBtn = document.getElementById('searchBtn');
-const submitWikiBtn = document.getElementById('submitWikiBtn');
 const loadHistoryBtn = document.getElementById('loadHistoryBtn');
 const saveConfigBtn = document.getElementById('saveConfigBtn');
 const testConnectionBtn = document.getElementById('testConnectionBtn');
@@ -23,7 +22,6 @@ document.addEventListener('DOMContentLoaded', () => {
 // 设置事件监听
 function setupEventListeners() {
     searchBtn.addEventListener('click', handleSearch);
-    submitWikiBtn.addEventListener('click', handleSubmitToWiki);
     loadHistoryBtn.addEventListener('click', loadHistory);
     saveConfigBtn.addEventListener('click', saveConfig);
     testConnectionBtn.addEventListener('click', testConnection);
@@ -121,9 +119,13 @@ function displayResults(results) {
         return;
     }
 
-    // 启用提交按钮（如果有找到的结果）
-    const hasFound = results.some(r => r.status === 'found');
-    submitWikiBtn.disabled = !hasFound;
+    // 显示搜索结果
+    resultsList.innerHTML = '';
+
+    if (results.length === 0) {
+        resultsList.innerHTML = '<div class="empty-state">无搜索结果</div>';
+        return;
+    }
 
     results.forEach(result => {
         const card = createAvCard(result);
@@ -184,6 +186,7 @@ function createAvCard(result) {
                 </div>
             ` : ''}
             <div class="actions">
+                <button class="btn btn-success btn-sm" onclick="submitToWiki('${escapeHtml(data.av_id)}')">提交到Wiki</button>
                 <button class="btn btn-primary btn-sm" onclick="showWikiContent('${escapeHtml(data.av_id)}')">Wiki内容</button>
                 <button class="btn btn-danger btn-sm" onclick="deleteAv('${escapeHtml(data.av_id)}')">删除</button>
             </div>
@@ -300,42 +303,27 @@ function safeJsonParse(str) {
     }
 }
 
-// 提交到Wiki
-async function handleSubmitToWiki() {
-    const foundResults = currentResults.filter(r => r.status === 'found');
-
-    if (foundResults.length === 0) {
-        showToast('没有可提交的结果', 'error');
-        return;
-    }
-
-    const avIds = foundResults.map(r => r.av_id);
-
-    submitWikiBtn.disabled = true;
-    showToast('正在提交到Wiki...');
-
+// 提交单个番号到Wiki
+async function submitToWiki(avId) {
     try {
         const response = await fetch('/api/submit-to-wiki', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ av_ids: avIds })
+            body: JSON.stringify({ av_ids: [avId] })
         });
 
         const data = await response.json();
 
-        if (data.success) {
-            const successCount = data.results.filter(r => r.status === 'success').length;
-            showToast(`提交完成：成功 ${successCount}/${avIds.length} 个`);
+        if (data.success && data.results[0].status === 'success') {
+            showToast(`${avId} 已提交到Wiki`);
         } else {
-            showToast(data.error || '提交失败', 'error');
+            showToast(data.results[0]?.message || '提交失败', 'error');
         }
     } catch (error) {
         console.error('Submit error:', error);
         showToast('提交请求失败', 'error');
-    } finally {
-        submitWikiBtn.disabled = false;
     }
 }
 
@@ -393,8 +381,8 @@ function displayHistory(avList) {
                     </div>
                 ` : ''}
                 <div class="actions">
+                    <button class="btn btn-success btn-sm" onclick="submitToWiki('${escapeHtml(av.av_id)}')">提交到Wiki</button>
                     <button class="btn btn-primary btn-sm" onclick="showWikiContent('${escapeHtml(av.av_id)}')">Wiki内容</button>
-                    <button class="btn btn-primary btn-sm" onclick="resubmitToWiki('${escapeHtml(av.av_id)}')">重新提交</button>
                     <button class="btn btn-danger btn-sm" onclick="deleteAv('${escapeHtml(av.av_id)}')">删除</button>
                 </div>
             </div>
@@ -426,30 +414,6 @@ async function deleteAv(avId) {
     } catch (error) {
         console.error('Delete error:', error);
         showToast('删除请求失败', 'error');
-    }
-}
-
-// 重新提交到Wiki
-async function resubmitToWiki(avId) {
-    try {
-        const response = await fetch('/api/submit-to-wiki', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ av_ids: [avId] })
-        });
-
-        const data = await response.json();
-
-        if (data.success && data.results[0].status === 'success') {
-            showToast(`${avId} 已提交到Wiki`);
-        } else {
-            showToast(data.results[0]?.message || '提交失败', 'error');
-        }
-    } catch (error) {
-        console.error('Resubmit error:', error);
-        showToast('提交请求失败', 'error');
     }
 }
 
