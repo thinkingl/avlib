@@ -15,7 +15,7 @@ logger.info("=" * 50)
 logger.info("AVLib 应用启动")
 
 # 运行时设置文件（保存前端修改的DokuWiki配置）
-SETTINGS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'settings.json')
+SETTINGS_PATH = os.environ.get('AVLIB_SETTINGS_PATH', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'settings.json'))
 SETTINGS_KEYS = ['dokuwiki_url', 'dokuwiki_username', 'dokuwiki_password', 'dokuwiki_api_token']
 
 def _load_settings():

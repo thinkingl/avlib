@@ -2,8 +2,10 @@ import logging
 import os
 from datetime import datetime
 
-def setup_logger(name='avlib', log_dir='logs'):
+def setup_logger(name='avlib', log_dir=None):
     """设置日志配置"""
+    log_dir = log_dir or os.environ.get('AVLIB_LOG_DIR', 'logs')
+
     # 创建日志目录
     os.makedirs(log_dir, exist_ok=True)
 
