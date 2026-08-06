@@ -1,6 +1,9 @@
 import requests
 import base64
 import os
+import xmlrpc.client
+from http.cookiejar import CookieJar
+from urllib.request import build_opener, HTTPCookieProcessor, Request
 from config import Config
 
 def get_cover_filename(av_info, ext='jpg'):
@@ -20,6 +23,32 @@ def get_cover_filename(av_info, ext='jpg'):
     return f"{av_id}.{ext}"
 
 
+class _CookieTransport(xmlrpc.client.Transport):
+    """带会话cookie的XML-RPC传输层
+
+    新版DokuWiki（2023-04-04+）改用会话认证：dokuwiki.login 建立PHP会话，
+    后续XML-RPC调用必须携带会话cookie，不再使用token参数。
+    """
+
+    def __init__(self, use_https=False, timeout=30):
+        self._use_https = use_https
+        self._timeout = timeout
+        self.verbose = 0
+        self.cookie_jar = CookieJar()
+        self.opener = build_opener(HTTPCookieProcessor(self.cookie_jar))
+        super().__init__()
+
+    def request(self, host, handler, request_body, verbose=False):
+        scheme = 'https' if self._use_https else 'http'
+        req = Request(
+            f'{scheme}://{host}{handler}',
+            data=request_body,
+            headers={'Content-Type': 'text/xml'},
+        )
+        resp = self.opener.open(req, timeout=self._timeout)
+        return self.parse_response(resp)
+
+
 class DokuWikiClient:
     def __init__(self, url=None, username=None, password=None, api_token=None):
         self.url = url or Config.DOKUWIKI_URL
@@ -29,27 +58,21 @@ class DokuWikiClient:
         self.api_url = f"{self.url}/lib/exe/ajax.php"
         self.xmlrpc_url = f"{self.url}/lib/exe/xmlrpc.php"
 
-    def _get_auth_headers(self):
-        """获取认证头"""
-        headers = {}
-
+    def _call(self, method, *args):
+        """登录并调用XML-RPC方法（新版DokuWiki：会话cookie认证）"""
         if self.api_token:
-            headers['Authorization'] = f'Bearer {self.api_token}'
-        elif self.username and self.password:
-            credentials = base64.b64encode(f"{self.username}:{self.password}".encode()).decode()
-            headers['Authorization'] = f'Basic {credentials}'
-
-        return headers
+            print("Warning: api_token 已不被新版DokuWiki支持，改用账号密码登录")
+        transport = _CookieTransport(use_https=self.url.startswith('https://'))
+        proxy = xmlrpc.client.ServerProxy(f"{self.url}/lib/exe/xmlrpc.php", transport=transport)
+        ok = proxy.dokuwiki.login(self.username, self.password)
+        if not ok:
+            raise RuntimeError('Authentication failed')
+        return getattr(proxy, method)(*args)
 
     def test_connection(self):
-        """测试连接"""
+        """测试连接（验证XML-RPC API可用且账号密码正确）"""
         try:
-            response = requests.get(
-                f"{self.url}/doku.php",
-                headers=self._get_auth_headers(),
-                timeout=10
-            )
-            return response.status_code == 200
+            return bool(self._call('dokuwiki.getTitle'))
         except Exception as e:
             print(f"Connection test failed: {e}")
             return False
@@ -57,26 +80,10 @@ class DokuWikiClient:
     def create_page(self, page_id, content, summary=None):
         """创建或更新Wiki页面"""
         try:
-            # 使用XML-RPC API
-            import xmlrpc.client
-
-            proxy = xmlrpc.client.ServerProxy(self.xmlrpc_url)
-
-            # 认证
-            if self.api_token:
-                token = self.api_token
-            else:
-                token = proxy.dokuwiki.login(self.username, self.password)
-
-            if not token:
-                return False, "Authentication failed"
-
-            # 创建页面
-            result = proxy.dokuwiki.putPage(token, page_id, content, {
+            result = self._call('wiki.putPage', page_id, content, {
                 'sum': summary or f'Created page {page_id}',
                 'minor': False
             })
-
             return result, "Success" if result else "Failed"
 
         except Exception as e:
@@ -86,28 +93,11 @@ class DokuWikiClient:
     def upload_media(self, page_id, file_path, overwrite=True):
         """上传媒体文件"""
         try:
-            import xmlrpc.client
-
-            proxy = xmlrpc.client.ServerProxy(self.xmlrpc_url)
-
-            # 认证
-            if self.api_token:
-                token = self.api_token
-            else:
-                token = proxy.dokuwiki.login(self.username, self.password)
-
-            if not token:
-                return False, "Authentication failed"
-
-            # 读取文件
             with open(file_path, 'rb') as f:
                 file_data = xmlrpc.client.Binary(f.read())
-
-            # 上传文件
-            result = proxy.dokuwiki.putAttachment(token, page_id, file_data, {
+            result = self._call('wiki.putAttachment', page_id, file_data, {
                 'ow': overwrite
             })
-
             return result, "Success" if result else "Failed"
 
         except Exception as e:
@@ -117,27 +107,10 @@ class DokuWikiClient:
     def upload_media_data(self, page_id, data, overwrite=True):
         """上传媒体数据（二进制）"""
         try:
-            import xmlrpc.client
-
-            proxy = xmlrpc.client.ServerProxy(self.xmlrpc_url)
-
-            # 认证
-            if self.api_token:
-                token = self.api_token
-            else:
-                token = proxy.dokuwiki.login(self.username, self.password)
-
-            if not token:
-                return False, "Authentication failed"
-
-            # 转换为Binary
             file_data = xmlrpc.client.Binary(data)
-
-            # 上传文件
-            result = proxy.dokuwiki.putAttachment(token, page_id, file_data, {
+            result = self._call('wiki.putAttachment', page_id, file_data, {
                 'ow': overwrite
             })
-
             return result, "Success" if result else "Failed"
 
         except Exception as e:
@@ -147,46 +120,16 @@ class DokuWikiClient:
     def page_exists(self, page_id):
         """检查页面是否存在"""
         try:
-            import xmlrpc.client
-
-            proxy = xmlrpc.client.ServerProxy(self.xmlrpc_url)
-
-            # 认证
-            if self.api_token:
-                token = self.api_token
-            else:
-                token = proxy.dokuwiki.login(self.username, self.password)
-
-            if not token:
-                return False
-
-            # 获取页面信息
-            result = proxy.dokuwiki.getPageInfo(token, page_id)
-            return result is not None
-
+            result = self._call('wiki.getPageInfo', page_id)
+            return bool(result)
         except Exception as e:
+            print(f"Error checking page: {e}")
             return False
 
     def get_page(self, page_id):
         """获取页面内容"""
         try:
-            import xmlrpc.client
-
-            proxy = xmlrpc.client.ServerProxy(self.xmlrpc_url)
-
-            # 认证
-            if self.api_token:
-                token = self.api_token
-            else:
-                token = proxy.dokuwiki.login(self.username, self.password)
-
-            if not token:
-                return None
-
-            # 获取页面内容
-            content = proxy.dokuwiki.getPage(token, page_id)
-            return content
-
+            return self._call('wiki.getPage', page_id)
         except Exception as e:
             print(f"Error getting page: {e}")
             return None

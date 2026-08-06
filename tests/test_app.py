@@ -424,18 +424,19 @@ class TestDokuWikiClient(unittest.TestCase):
         self.assertEqual(self.client.username, 'testuser')
         self.assertEqual(self.client.password, 'testpass')
 
-    def test_get_auth_headers_basic(self):
-        """测试获取Basic认证头"""
-        headers = self.client._get_auth_headers()
-        self.assertIn('Authorization', headers)
-        self.assertTrue(headers['Authorization'].startswith('Basic '))
+    def test_cookie_transport_session(self):
+        """新版DokuWiki使用会话cookie认证（不再使用token）"""
+        from dokuwiki import _CookieTransport
+        transport = _CookieTransport()
+        self.assertIsNotNone(transport.cookie_jar)
+        self.assertEqual(transport.verbose, 0)
+        self.assertFalse(hasattr(self.client, '_get_auth_headers'))
 
-    def test_get_auth_headers_token(self):
-        """测试获取Token认证头"""
-        from dokuwiki import DokuWikiClient
-        client = DokuWikiClient(api_token='test-token')
-        headers = client._get_auth_headers()
-        self.assertEqual(headers['Authorization'], 'Bearer test-token')
+    def test_cookie_transport_scheme(self):
+        """传输层按URL选择http/https"""
+        from dokuwiki import _CookieTransport
+        self.assertFalse(_CookieTransport()._use_https)
+        self.assertTrue(_CookieTransport(use_https=True)._use_https)
 
     def test_format_av_page(self):
         """测试格式化AV页面"""
