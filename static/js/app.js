@@ -179,7 +179,9 @@ function createAvCard(result) {
                 <div class="tags">
                     ${actresses.map(a => `<span class="tag actress">${escapeHtml(a)}</span>`).join('')}
                 </div>
-            ` : ''}
+            ` : `
+                <div class="tags"><span class="empty-tags">演员：未收录</span></div>
+            `}
             ${genres.length > 0 ? `
                 <div class="tags">
                     ${genres.map(g => `<span class="tag genre">${escapeHtml(g)}</span>`).join('')}
@@ -379,7 +381,9 @@ function displayHistory(avList) {
                     <div class="tags">
                         ${actresses.map(a => `<span class="tag actress">${escapeHtml(a)}</span>`).join('')}
                     </div>
-                ` : ''}
+                ` : `
+                    <div class="tags"><span class="empty-tags">演员：未收录</span></div>
+                `}
                 <div class="actions">
                     <button class="btn btn-success btn-sm" onclick="submitToWiki('${escapeHtml(av.av_id)}')">提交到Wiki</button>
                     <button class="btn btn-primary btn-sm" onclick="showWikiContent('${escapeHtml(av.av_id)}')">Wiki内容</button>

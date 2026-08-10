@@ -479,6 +479,19 @@ class TestDokuWikiClient(unittest.TestCase):
         self.assertIn('类型A', content)
         self.assertIn('{{:av:2024-12-11-format-002.jpg|}}', content)
 
+    def test_format_av_page_empty_actresses(self):
+        """测试演员为空时仍输出演员字段"""
+        av_info = {
+            'av_id': 'FORMAT-003',
+            'title': '空演员测试',
+            'release_date': '2024-12-11'
+        }
+
+        content = self.client.format_av_page(av_info)
+
+        self.assertIn('演员:', content)
+        self.assertIn('演员:\t-', content)
+
     def test_get_cover_filename(self):
         """测试生成封面文件名"""
         from dokuwiki import get_cover_filename

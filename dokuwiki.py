@@ -191,10 +191,9 @@ class DokuWikiClient:
             genres_str = " ".join(genres)
             lines.append(f"类别:{tab}{genres_str}  \\\\")
 
-        # 演员
-        if actresses:
-            actresses_str = " ".join(actresses)
-            lines.append(f"演员:{tab}{actresses_str}  \\\\")
+        # 演员（始终输出该字段，未收录时显示-）
+        actresses_str = " ".join(actresses) if actresses else "-"
+        lines.append(f"演员:{tab}{actresses_str}  \\\\")
 
         lines.append("")
 

@@ -373,6 +373,11 @@ h2 {
     background: #e91e63;
 }
 
+.empty-tags {
+    font-size: 12px;
+    color: #999;
+}
+
 .av-card .info .tag.genre {
     background: #4caf50;
 }
