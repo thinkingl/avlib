@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import subprocess
 from flask import Flask, request, jsonify, render_template, Response
 from config import Config
 from database import Database
@@ -45,6 +46,22 @@ def _save_settings(updates):
 
 # 加载持久化的设置
 _apply_settings(_load_settings())
+
+def get_git_version():
+    """获取当前代码的git提交版本信息"""
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    try:
+        commit = subprocess.check_output(
+            ['git', 'rev-parse', '--short', 'HEAD'],
+            cwd=base_dir, stderr=subprocess.DEVNULL
+        ).decode().strip()
+        commit_time = subprocess.check_output(
+            ['git', 'log', '-1', '--format=%cI'],
+            cwd=base_dir, stderr=subprocess.DEVNULL
+        ).decode().strip()
+        return {'commit': commit, 'commit_time': commit_time}
+    except Exception:
+        return {'commit': 'unknown', 'commit_time': ''}
 
 # 初始化数据库
 db = Database()
@@ -373,6 +390,11 @@ def wiki_preview(av_id):
         'content': content,
         'page_id': f"av:{av_info['av_id']}"
     })
+
+@app.route('/api/version', methods=['GET'])
+def get_version():
+    """获取git版本信息"""
+    return jsonify({'success': True, **get_git_version()})
 
 @app.route('/api/config', methods=['GET'])
 def get_config():

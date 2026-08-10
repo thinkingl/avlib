@@ -15,9 +15,33 @@ let currentResults = [];
 
 // 初始化
 document.addEventListener('DOMContentLoaded', () => {
+    loadVersion();
     loadConfig();
     setupEventListeners();
 });
+
+// 加载git版本信息
+async function loadVersion() {
+    try {
+        const response = await fetch('/api/version');
+        const data = await response.json();
+
+        if (data.success) {
+            const timeText = data.commit_time ? formatCommitTime(data.commit_time) : '';
+            document.getElementById('versionInfo').textContent = `v-${data.commit}${timeText ? ` · ${timeText}` : ''}`;
+        }
+    } catch (error) {
+        console.error('Load version error:', error);
+    }
+}
+
+// git提交时间(UTC ISO8601)转本地显示
+function formatCommitTime(isoStr) {
+    if (!isoStr) return '';
+    const d = new Date(isoStr);
+    if (isNaN(d.getTime())) return isoStr;
+    return d.toLocaleString('zh-CN', { hour12: false });
+}
 
 // 设置事件监听
 function setupEventListeners() {

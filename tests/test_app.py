@@ -268,6 +268,15 @@ class TestFlaskApp(unittest.TestCase):
 
         self.assertFalse(data['success'])
 
+    def test_get_version(self):
+        """测试获取版本信息"""
+        response = self.client.get('/api/version')
+        data = json.loads(response.data)
+
+        self.assertTrue(data['success'])
+        self.assertIn('commit', data)
+        self.assertIn('commit_time', data)
+
     def test_get_config(self):
         """测试获取配置"""
         response = self.client.get('/api/config')
