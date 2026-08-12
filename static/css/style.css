@@ -387,6 +387,34 @@ h2 {
     color: #999;
 }
 
+.comment-box {
+    background: #eef4ff;
+    border: 1px solid #d0e0ff;
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin-bottom: 10px;
+    font-size: 13px;
+    color: #445;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.comment-input {
+    flex: 1;
+    margin: 15px 20px 0;
+    min-height: 120px;
+    padding: 10px 12px;
+    border: 2px solid #ddd;
+    border-radius: 6px;
+    font-size: 14px;
+    resize: vertical;
+}
+
+.comment-input:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
 .av-card .info .tag.genre {
     background: #4caf50;
 }

@@ -341,6 +341,55 @@ class TestFlaskApp(unittest.TestCase):
         self.assertIn('2024-12-11-dl-cover-001.png', response.headers.get('Content-Disposition', ''))
         self.assertEqual(response.data, image_data)
 
+    def test_update_comment(self):
+        """测试添加/修改评论"""
+        self.test_db.insert_av_info({
+            'av_id': 'CMT-001',
+            'title': '评论测试',
+            'source': 'test'
+        })
+
+        # 添加评论
+        response = self.client.put('/api/av/CMT-001/comment',
+                                   json={'comment': '第一条评论'},
+                                   content_type='application/json')
+        data = json.loads(response.data)
+        self.assertTrue(data['success'])
+        self.assertEqual(self.test_db.get_av_info('CMT-001')['comment'], '第一条评论')
+
+        # 修改评论
+        response = self.client.put('/api/av/CMT-001/comment',
+                                   json={'comment': '修改后'},
+                                   content_type='application/json')
+        data = json.loads(response.data)
+        self.assertTrue(data['success'])
+        self.assertEqual(self.test_db.get_av_info('CMT-001')['comment'], '修改后')
+
+    def test_update_comment_not_found(self):
+        """测试更新不存在番号的评论"""
+        response = self.client.put('/api/av/NOT-EXIST/comment',
+                                   json={'comment': '测试'},
+                                   content_type='application/json')
+        data = json.loads(response.data)
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(data['success'])
+
+    def test_update_comment_cleared(self):
+        """测试清空评论"""
+        self.test_db.insert_av_info({
+            'av_id': 'CMT-002',
+            'title': '清空评论',
+            'comment': '旧评论',
+            'source': 'test'
+        })
+
+        response = self.client.put('/api/av/CMT-002/comment',
+                                   json={'comment': ' '},
+                                   content_type='application/json')
+        data = json.loads(response.data)
+        self.assertTrue(data['success'])
+        self.assertEqual(self.test_db.get_av_info('CMT-002')['comment'], '')
+
     def test_search_av_multiple_ids(self):
         """测试批量搜索多个番号"""
         # 插入测试数据
@@ -500,6 +549,32 @@ class TestDokuWikiClient(unittest.TestCase):
 
         self.assertIn('演员:', content)
         self.assertIn('演员:\t-', content)
+
+    def test_format_av_page_with_comment(self):
+        """测试格式化包含评论的AV页面"""
+        av_info = {
+            'av_id': 'FORMAT-004',
+            'title': '评论测试',
+            'release_date': '2024-12-11',
+            'comment': '值得一看\n第二行评论'
+        }
+
+        content = self.client.format_av_page(av_info)
+
+        self.assertIn('评论:', content)
+        self.assertIn('值得一看', content)
+        self.assertIn('第二行评论', content)
+
+    def test_format_av_page_empty_comment(self):
+        """测试评论为空时仍输出评论字段"""
+        av_info = {
+            'av_id': 'FORMAT-005',
+            'title': '空评论测试'
+        }
+
+        content = self.client.format_av_page(av_info)
+
+        self.assertIn('评论:\t-', content)
 
     def test_get_cover_filename(self):
         """测试生成封面文件名"""

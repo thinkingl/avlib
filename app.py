@@ -268,6 +268,28 @@ def delete_av(av_id):
         'message': f'已删除 {av_id}'
     })
 
+@app.route('/api/av/<av_id>/comment', methods=['PUT'])
+def update_av_comment(av_id):
+    """添加/修改番号评论"""
+    av_id = av_id.upper()
+    data = request.json or {}
+    comment = (data.get('comment') or '').strip()
+
+    logger.info(f"更新评论: {av_id}")
+
+    av_info = db.get_av_info(av_id)
+    if not av_info:
+        logger.warning(f"更新评论失败，未找到: {av_id}")
+        return jsonify({'success': False, 'error': '未找到该番号'}), 404
+
+    db.update_av_comment(av_id, comment)
+    logger.info(f"评论已保存: {av_id}")
+
+    return jsonify({
+        'success': True,
+        'message': '评论已保存'
+    })
+
 @app.route('/api/submit-to-wiki', methods=['POST'])
 def submit_to_wiki():
     """提交到DokuWiki"""

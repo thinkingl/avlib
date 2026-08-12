@@ -211,7 +211,11 @@ function createAvCard(result) {
                     ${genres.map(g => `<span class="tag genre">${escapeHtml(g)}</span>`).join('')}
                 </div>
             ` : ''}
+            ${data.comment ? `
+                <div class="comment-box"><strong>评论：</strong>${escapeHtml(data.comment)}</div>
+            ` : ''}
             <div class="actions">
+                <button class="btn btn-secondary btn-sm" onclick="openCommentModal('${escapeHtml(data.av_id)}')">${data.comment ? '修改评论' : '添加评论'}</button>
                 <button class="btn btn-success btn-sm" onclick="submitToWiki('${escapeHtml(data.av_id)}')">提交到Wiki</button>
                 <button class="btn btn-primary btn-sm" onclick="showWikiContent('${escapeHtml(data.av_id)}')">Wiki内容</button>
                 <button class="btn btn-danger btn-sm" onclick="deleteAv('${escapeHtml(data.av_id)}')">删除</button>
@@ -293,6 +297,68 @@ async function copyWikiContent() {
     } catch (error) {
         console.error('Copy error:', error);
         showToast('复制失败', 'error');
+    }
+}
+
+// 评论相关
+let currentCommentAvId = null;
+
+// 打开评论编辑弹窗
+async function openCommentModal(avId) {
+    currentCommentAvId = avId;
+    document.getElementById('commentModalTitle').textContent = `评论 - ${avId}`;
+    document.getElementById('commentInput').value = '';
+    document.getElementById('commentModal').style.display = 'flex';
+
+    // 预填现有评论
+    try {
+        const response = await fetch(`/api/av/${encodeURIComponent(avId)}`);
+        const data = await response.json();
+        if (data.success && data.data.comment) {
+            document.getElementById('commentInput').value = data.data.comment;
+        }
+    } catch (error) {
+        console.error('Load comment error:', error);
+    }
+}
+
+// 关闭评论弹窗
+function closeCommentModal() {
+    document.getElementById('commentModal').style.display = 'none';
+    currentCommentAvId = null;
+}
+
+// 保存评论
+async function saveComment() {
+    if (!currentCommentAvId) return;
+
+    const comment = document.getElementById('commentInput').value.trim();
+    const saveBtn = document.getElementById('saveCommentBtn');
+    saveBtn.disabled = true;
+
+    try {
+        const response = await fetch(`/api/av/${encodeURIComponent(currentCommentAvId)}/comment`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ comment: comment })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showToast('评论已保存');
+            closeCommentModal();
+            loadHistory(); // 刷新历史显示评论
+        } else {
+            showToast(data.error || '保存失败', 'error');
+        }
+    } catch (error) {
+        console.error('Save comment error:', error);
+        showToast('保存失败', 'error');
+    } finally {
+        saveBtn.disabled = false;
     }
 }
 
@@ -408,7 +474,11 @@ function displayHistory(avList) {
                 ` : `
                     <div class="tags"><span class="empty-tags">演员：未收录</span></div>
                 `}
+                ${av.comment ? `
+                    <div class="comment-box"><strong>评论：</strong>${escapeHtml(av.comment)}</div>
+                ` : ''}
                 <div class="actions">
+                    <button class="btn btn-secondary btn-sm" onclick="openCommentModal('${escapeHtml(av.av_id)}')">${av.comment ? '修改评论' : '添加评论'}</button>
                     <button class="btn btn-success btn-sm" onclick="submitToWiki('${escapeHtml(av.av_id)}')">提交到Wiki</button>
                     <button class="btn btn-primary btn-sm" onclick="showWikiContent('${escapeHtml(av.av_id)}')">Wiki内容</button>
                     <button class="btn btn-danger btn-sm" onclick="deleteAv('${escapeHtml(av.av_id)}')">删除</button>

@@ -49,7 +49,8 @@ class Database:
         # 检查并添加缺失的列
         self._add_missing_columns(cursor, 'av_info', {
             'cover_data': 'BLOB',
-            'cover_mime': 'TEXT DEFAULT "image/jpeg"'
+            'cover_mime': 'TEXT DEFAULT "image/jpeg"',
+            'comment': 'TEXT'
         })
 
         # 创建搜索历史表
@@ -97,6 +98,12 @@ class Database:
         cursor = conn.cursor()
 
         try:
+            # 重新抓取时保留已有评论，避免覆盖用户评论
+            if not av_data.get('comment'):
+                existing = self.get_av_info(av_data.get('av_id', ''))
+                if existing and existing.get('comment'):
+                    av_data['comment'] = existing['comment']
+
             # 处理列表类型的数据
             actresses = av_data.get('actresses', [])
             genres = av_data.get('genres', [])
@@ -122,8 +129,8 @@ class Database:
             cursor.execute('''
                 INSERT OR REPLACE INTO av_info 
                 (av_id, title, studio, publisher, series, release_date, 
-                 duration, director, actresses, genres, cover_url, cover_path, cover_data, cover_mime, source, rating, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 duration, director, actresses, genres, cover_url, cover_path, cover_data, cover_mime, source, rating, comment, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 av_data['av_id'],
                 av_data.get('title'),
@@ -141,6 +148,7 @@ class Database:
                 av_data.get('cover_mime', 'image/jpeg'),
                 av_data.get('source'),
                 av_data.get('rating'),
+                av_data.get('comment'),
                 utc_now_str()
             ))
 
@@ -246,3 +254,14 @@ class Database:
         cursor.execute('DELETE FROM av_info WHERE av_id = ?', (av_id,))
         conn.commit()
         conn.close()
+
+    def update_av_comment(self, av_id, comment):
+        """更新番号的评论"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('UPDATE av_info SET comment = ? WHERE av_id = ?', (comment, av_id))
+        conn.commit()
+        conn.close()
+
+        return cursor.rowcount > 0

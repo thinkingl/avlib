@@ -195,6 +195,14 @@ class DokuWikiClient:
         actresses_str = " ".join(actresses) if actresses else "-"
         lines.append(f"演员:{tab}{actresses_str}  \\\\")
 
+        # 评论（多行评论转为DokuWiki换行，始终输出该字段）
+        comment = (av_info.get('comment') or '').strip()
+        if comment:
+            comment_str = comment.replace('\n', '  \\\\')
+            lines.append(f"评论:{tab}{comment_str}  \\\\")
+        else:
+            lines.append(f"评论:{tab}-  \\\\")
+
         lines.append("")
 
         # 封面图片 - 使用日期-番号格式

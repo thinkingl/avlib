@@ -85,6 +85,21 @@
             </section>
         </main>
 
+        <!-- 评论编辑弹窗 -->
+        <div id="commentModal" class="modal-overlay" style="display: none;">
+            <div class="modal">
+                <div class="modal-header">
+                    <h3 id="commentModalTitle">添加评论</h3>
+                    <button class="btn btn-sm btn-close" onclick="closeCommentModal()">&times;</button>
+                </div>
+                <textarea id="commentInput" class="comment-input" placeholder="输入评论..."></textarea>
+                <div class="button-group modal-footer">
+                    <button id="saveCommentBtn" class="btn btn-primary" onclick="saveComment()">保存</button>
+                    <button class="btn btn-secondary" onclick="closeCommentModal()">取消</button>
+                </div>
+            </div>
+        </div>
+
         <!-- 大图查看 -->
         <div id="lightbox" class="lightbox" style="display: none;" onclick="closeLightbox()">
             <img id="lightboxImg" src="" alt="" onclick="event.stopPropagation()">

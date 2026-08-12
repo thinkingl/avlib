@@ -148,6 +148,43 @@ class TestDatabase(unittest.TestCase):
         result = self.db.get_all_av_info(limit=3)
         self.assertEqual(len(result), 3)
 
+    def test_update_av_comment(self):
+        """测试更新评论"""
+        self.db.insert_av_info({
+            'av_id': 'COMMENT-001',
+            'title': '评论测试',
+            'source': 'test'
+        })
+
+        # 添加评论
+        self.assertTrue(self.db.update_av_comment('COMMENT-001', '这是一条评论'))
+        saved = self.db.get_av_info('COMMENT-001')
+        self.assertEqual(saved['comment'], '这是一条评论')
+
+        # 修改评论
+        self.assertTrue(self.db.update_av_comment('COMMENT-001', '修改后的评论'))
+        saved = self.db.get_av_info('COMMENT-001')
+        self.assertEqual(saved['comment'], '修改后的评论')
+
+    def test_insert_av_info_keeps_comment(self):
+        """测试重新插入时保留已有评论"""
+        self.db.insert_av_info({
+            'av_id': 'COMMENT-002',
+            'title': '原始',
+            'comment': '用户评论',
+            'source': 'test'
+        })
+
+        # 重新抓取（不带comment）不应覆盖评论
+        self.db.insert_av_info({
+            'av_id': 'COMMENT-002',
+            'title': '重新抓取',
+            'source': 'test'
+        })
+
+        saved = self.db.get_av_info('COMMENT-002')
+        self.assertEqual(saved['comment'], '用户评论')
+
     def test_add_search_history(self):
         """测试添加搜索历史"""
         self.db.add_search_history('TEST-001', 'javbus', True)
