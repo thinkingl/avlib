@@ -32,6 +32,31 @@
                 </div>
             </section>
 
+            <!-- 手动导入 -->
+            <section class="import-section">
+                <details id="importPanel">
+                    <summary>手动导入（复制粘贴）</summary>
+                    <div class="import-form">
+                        <p class="import-help">
+                            在 javlibrary 影片页全选复制（Ctrl+A → Ctrl+C），粘贴到下方文本框（Ctrl+V）。<br>
+                            封面图会自动从复制内容中提取；若未提取到，可单独复制封面图片后直接粘贴，或选择本地图片文件。
+                        </p>
+                        <textarea id="importText" placeholder="粘贴 javlibrary 页面内容（需包含识别码）..."></textarea>
+                        <div id="importCoverInfo" class="import-cover-info" style="display: none;">
+                            <img id="importCoverPreview" src="" alt="封面预览">
+                            <span>已捕获封面</span>
+                            <button class="btn btn-danger btn-sm" onclick="clearImportCover()">移除</button>
+                        </div>
+                        <div class="button-group">
+                            <button id="importBtn" class="btn btn-primary">解析并导入</button>
+                            <label class="btn btn-secondary btn-file">选择封面图片
+                                <input type="file" id="importCoverFile" accept="image/*">
+                            </label>
+                        </div>
+                    </div>
+                </details>
+            </section>
+
             <!-- 加载指示器 -->
             <div id="loading" class="loading" style="display: none;">
                 <div class="spinner"></div>

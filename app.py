@@ -1,7 +1,9 @@
 import os
 import re
 import json
+import base64
 import subprocess
+import requests
 from flask import Flask, request, jsonify, render_template, Response
 from config import Config
 from database import Database
@@ -288,6 +290,78 @@ def update_av_comment(av_id):
     return jsonify({
         'success': True,
         'message': '评论已保存'
+    })
+
+@app.route('/api/import', methods=['POST'])
+def import_av():
+    """手动导入AV记录（来自书签脚本或复制粘贴）"""
+    data = request.json or {}
+    av_id = (data.get('av_id') or '').strip().upper()
+
+    if not av_id:
+        logger.warning("导入请求缺少番号")
+        return jsonify({'success': False, 'error': '缺少番号'}), 400
+
+    existing = db.get_av_info(av_id)
+    if existing:
+        logger.info(f"导入记录已存在: {av_id}")
+        return jsonify({'success': False, 'error': f'{av_id} 已存在，如需更新请先删除'}), 409
+
+    av_info = {
+        'av_id': av_id,
+        'title': data.get('title') or '',
+        'studio': data.get('studio') or '',
+        'publisher': data.get('publisher') or '',
+        'series': data.get('series') or '',
+        'release_date': data.get('release_date') or '',
+        'duration': data.get('duration') or '',
+        'director': data.get('director') or '',
+        'actresses': data.get('actresses') or [],
+        'genres': data.get('genres') or [],
+        'cover_url': data.get('cover_url') or '',
+        'source': data.get('source') or 'manual',
+        'rating': data.get('rating') or ''
+    }
+
+    # 封面：优先使用粘贴/上传的图片数据，其次从URL下载
+    cover_base64 = data.get('cover_base64') or ''
+    cover_url = av_info['cover_url']
+
+    if cover_base64:
+        try:
+            # data:image/jpeg;base64,xxxx 或纯base64
+            mime = 'image/jpeg'
+            if cover_base64.startswith('data:'):
+                header, cover_base64 = cover_base64.split(',', 1)
+                if ';' in header:
+                    mime = header.split(':', 1)[1].split(';', 1)[0] or mime
+            av_info['cover_data'] = base64.b64decode(cover_base64)
+            av_info['cover_mime'] = mime
+            logger.info(f"导入封面来自粘贴图片: {len(av_info['cover_data'])} bytes")
+        except Exception as e:
+            logger.error(f"导入封面数据解析失败: {e}")
+    elif cover_url:
+        try:
+            headers = {'User-Agent': Config.USER_AGENT}
+            if 'javlibrary.com' in cover_url:
+                headers['Referer'] = 'https://www.javlibrary.com/'
+            resp = requests.get(cover_url, headers=headers, timeout=Config.REQUEST_TIMEOUT)
+            resp.raise_for_status()
+            cover_mime = resp.headers.get('Content-Type', 'image/jpeg').split(';')[0].strip()
+            av_info['cover_data'] = resp.content
+            av_info['cover_mime'] = cover_mime
+            logger.info(f"导入封面下载成功: {len(resp.content)} bytes")
+        except Exception as e:
+            logger.error(f"导入封面下载失败: {e}")
+
+    db.insert_av_info(av_info)
+    db.add_search_history(av_id, av_info['source'], True)
+    logger.info(f"手动导入完成: {av_id}")
+
+    return jsonify({
+        'success': True,
+        'message': f'{av_id} 导入成功',
+        'av_id': av_id
     })
 
 @app.route('/api/submit-to-wiki', methods=['POST'])

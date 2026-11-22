@@ -1,6 +1,11 @@
 // DOM元素
 const avIdsInput = document.getElementById('avIds');
 const searchBtn = document.getElementById('searchBtn');
+const importBtn = document.getElementById('importBtn');
+const importText = document.getElementById('importText');
+const importCoverFile = document.getElementById('importCoverFile');
+const importCoverInfo = document.getElementById('importCoverInfo');
+const importCoverPreview = document.getElementById('importCoverPreview');
 const loadHistoryBtn = document.getElementById('loadHistoryBtn');
 const saveConfigBtn = document.getElementById('saveConfigBtn');
 const testConnectionBtn = document.getElementById('testConnectionBtn');
@@ -59,6 +64,19 @@ function setupEventListeners() {
 
     // 刷新按钮不触发summary折叠
     loadHistoryBtn.addEventListener('click', (e) => e.stopPropagation());
+
+    // 导入区：粘贴捕获HTML和图片
+    importText.addEventListener('paste', handleImportPaste);
+
+    // 导入区：选择本地封面图片
+    importCoverFile.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) setImportCover(file);
+        e.target.value = '';
+    });
+
+    // 导入按钮
+    importBtn.addEventListener('click', handleImport);
 
     // 回车键搜索
     avIdsInput.addEventListener('keydown', (e) => {
@@ -392,6 +410,209 @@ function safeJsonParse(str) {
         return JSON.parse(str);
     } catch {
         return [str];
+    }
+}
+
+// ==================== 手动导入 ====================
+
+let pendingImportHtml = null;   // 粘贴时捕获的HTML（优先用于解析）
+let pendingCoverBase64 = null;  // 粘贴/选择的封面图片（dataURL）
+
+// 字段标签映射（javlibrary）
+const IMPORT_FIELD_MAP = {
+    '识别码': 'av_id', '番号': 'av_id',
+    '发行日期': 'release_date', '發行日期': 'release_date',
+    '长度': 'duration', '長度': 'duration',
+    '导演': 'director', '導演': 'director',
+    '制作商': 'studio', '製作商': 'studio',
+    '发行商': 'publisher', '發行商': 'publisher',
+    '系列': 'series',
+    '评分': 'rating', '評分': 'rating'
+};
+const IMPORT_MULTI_MAP = {
+    '类别': 'genres', '類別': 'genres',
+    '演员': 'actresses', '演員': 'actresses'
+};
+
+// 粘贴处理：捕获HTML和剪贴板图片
+function handleImportPaste(e) {
+    const items = (e.clipboardData && e.clipboardData.items) || [];
+
+    // 剪贴板里是图片 → 作为封面兜底
+    for (const item of items) {
+        if (item.type.indexOf('image/') === 0) {
+            e.preventDefault();
+            const file = item.getAsFile();
+            if (file) setImportCover(file);
+            return;
+        }
+    }
+
+    // 网页复制的HTML → 解析时优先使用
+    const html = e.clipboardData ? e.clipboardData.getData('text/html') : '';
+    pendingImportHtml = html || null;
+}
+
+// 设置待导入封面
+function setImportCover(file) {
+    if (!file || file.type.indexOf('image/') !== 0) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+        pendingCoverBase64 = reader.result;
+        importCoverPreview.src = reader.result;
+        importCoverInfo.style.display = 'flex';
+    };
+    reader.readAsDataURL(file);
+}
+
+// 清除待导入封面
+function clearImportCover() {
+    pendingCoverBase64 = null;
+    importCoverPreview.src = '';
+    importCoverInfo.style.display = 'none';
+}
+
+// 解析javlibrary页面HTML（Ctrl+A复制的内容）
+function parseJavlibraryHtml(html) {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const result = { source: 'javlibrary' };
+
+    const titleEl = doc.querySelector('h3.post-title');
+    if (titleEl) result.title = titleEl.textContent.trim();
+
+    // 信息表
+    doc.querySelectorAll('#video_jacket_info tr').forEach(tr => {
+        const header = tr.querySelector('td.header, th');
+        const value = tr.querySelector('td.text, td:last-child');
+        if (!header || !value) return;
+
+        const key = IMPORT_FIELD_MAP[header.textContent.replace(/[:：]/g, '').trim()];
+        if (!key) return;
+
+        let val = value.textContent.trim();
+        if (key === 'av_id') val = val.toUpperCase();
+        if (val) result[key] = val;
+    });
+
+    // 封面
+    const img = doc.querySelector('#video_jacket_img');
+    if (img) {
+        let src = img.getAttribute('src') || '';
+        if (src.indexOf('//') === 0) {
+            src = 'https:' + src;
+        } else if (src.startsWith('/')) {
+            src = 'https://www.javlibrary.com' + src;
+        }
+        if (src) result.cover_url = src;
+    }
+
+    // 演员、类别
+    result.actresses = Array.from(doc.querySelectorAll('#video_cast a'))
+        .map(a => a.textContent.trim()).filter(a => a && a !== '...');
+    result.genres = Array.from(doc.querySelectorAll('#video_genres a'))
+        .map(a => a.textContent.trim()).filter(Boolean);
+
+    return result.av_id ? result : null;
+}
+
+// 解析纯文本（"标签: 值"格式）
+function parseImportText(text) {
+    text = (text || '').trim();
+    if (!text) return null;
+
+    // 兼容JSON格式
+    if (text.startsWith('{')) {
+        try {
+            const obj = JSON.parse(text);
+            if (obj.av_id) {
+                obj.av_id = String(obj.av_id).toUpperCase().trim();
+                obj.source = obj.source || 'manual';
+                return obj;
+            }
+        } catch (e) { /* 继续按文本解析 */ }
+    }
+
+    const result = { source: 'manual' };
+    let pendingKey = null;
+
+    const lookup = label => IMPORT_FIELD_MAP[label] || IMPORT_MULTI_MAP[label] || null;
+
+    const assign = (key, val) => {
+        if (key === 'genres' || key === 'actresses') {
+            result[key] = val.split(/\s+/).filter(Boolean);
+        } else {
+            result[key] = key === 'av_id' ? val.toUpperCase() : val;
+        }
+    };
+
+    for (const rawLine of text.split('\n')) {
+        const line = rawLine.trim();
+        if (!line) continue;
+
+        // "标签: 值" 或 "标签：值"
+        const m = line.match(/^([^\s:：]+)[:：]\s*(.*)$/);
+        if (m) {
+            const key = lookup(m[1]);
+            if (key) {
+                const val = m[2].trim();
+                if (val) { assign(key, val); pendingKey = null; }
+                else { pendingKey = key; }
+                continue;
+            }
+        }
+
+        // 单独一行的标签（无值）
+        const key2 = lookup(line.replace(/[:：]/g, ''));
+        if (key2) { pendingKey = key2; continue; }
+
+        // 上一行是标签，本行是值
+        if (pendingKey) { assign(pendingKey, line); pendingKey = null; }
+    }
+
+    return result.av_id ? result : null;
+}
+
+// 执行导入
+async function handleImport() {
+    let parsed = pendingImportHtml ? parseJavlibraryHtml(pendingImportHtml) : null;
+    if (!parsed) parsed = parseImportText(importText.value);
+
+    if (!parsed || !parsed.av_id) {
+        showToast('无法解析，请确认内容包含识别码', 'error');
+        return;
+    }
+
+    if (pendingCoverBase64) {
+        parsed.cover_base64 = pendingCoverBase64;
+    }
+
+    importBtn.disabled = true;
+    try {
+        const response = await fetch('/api/import', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(parsed)
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showToast(data.message || '导入成功');
+            importText.value = '';
+            pendingImportHtml = null;
+            clearImportCover();
+            loadHistory();
+        } else {
+            showToast(data.error || '导入失败', 'error');
+        }
+    } catch (error) {
+        console.error('Import error:', error);
+        showToast('导入请求失败', 'error');
+    } finally {
+        importBtn.disabled = false;
     }
 }
 

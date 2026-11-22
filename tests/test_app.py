@@ -1,5 +1,6 @@
 import unittest
 import json
+import base64
 import tempfile
 import os
 from unittest.mock import patch, MagicMock
@@ -389,6 +390,94 @@ class TestFlaskApp(unittest.TestCase):
         data = json.loads(response.data)
         self.assertTrue(data['success'])
         self.assertEqual(self.test_db.get_av_info('CMT-002')['comment'], '')
+
+    def test_import_basic(self):
+        """测试基础导入"""
+        response = self.client.post('/api/import',
+                                    json={
+                                        'av_id': 'imp-001',
+                                        'title': '导入测试',
+                                        'release_date': '2024-12-11',
+                                        'actresses': ['演员A'],
+                                        'genres': ['类型A'],
+                                        'source': 'javlibrary'
+                                    },
+                                    content_type='application/json')
+
+        data = json.loads(response.data)
+        self.assertTrue(data['success'])
+        saved = self.test_db.get_av_info('IMP-001')
+        self.assertIsNotNone(saved)
+        self.assertEqual(saved['title'], '导入测试')
+        self.assertEqual(saved['release_date'], '2024-12-11')
+
+    def test_import_with_base64_cover(self):
+        """测试导入带base64封面图片"""
+        image_data = b'\xff\xd8\xff\xe0fakejpeg'
+        cover_b64 = 'data:image/jpeg;base64,' + base64.b64encode(image_data).decode()
+
+        response = self.client.post('/api/import',
+                                    json={
+                                        'av_id': 'IMP-002',
+                                        'title': '带图导入',
+                                        'cover_base64': cover_b64
+                                    },
+                                    content_type='application/json')
+
+        data = json.loads(response.data)
+        self.assertTrue(data['success'])
+        saved_cover, saved_mime = self.test_db.get_cover_data('IMP-002')
+        self.assertEqual(saved_cover, image_data)
+        self.assertEqual(saved_mime, 'image/jpeg')
+
+    @patch('app.requests.get')
+    def test_import_with_cover_url(self, mock_get):
+        """测试导入从URL下载封面"""
+        mock_resp = MagicMock()
+        mock_resp.content = b'\xff\xd8\xff\xe0image'
+        mock_resp.headers = {'Content-Type': 'image/jpeg'}
+        mock_resp.raise_for_status = MagicMock()
+        mock_get.return_value = mock_resp
+
+        response = self.client.post('/api/import',
+                                    json={
+                                        'av_id': 'IMP-003',
+                                        'title': 'URL封面',
+                                        'cover_url': 'https://www.javlibrary.com/covers/imp-003.jpg'
+                                    },
+                                    content_type='application/json')
+
+        data = json.loads(response.data)
+        self.assertTrue(data['success'])
+        saved_cover, _ = self.test_db.get_cover_data('IMP-003')
+        self.assertEqual(saved_cover, b'\xff\xd8\xff\xe0image')
+        # 验证带Referer
+        call_headers = mock_get.call_args.kwargs.get('headers', {})
+        self.assertEqual(call_headers.get('Referer'), 'https://www.javlibrary.com/')
+
+    def test_import_missing_av_id(self):
+        """测试导入缺少番号"""
+        response = self.client.post('/api/import',
+                                    json={'title': '无番号'},
+                                    content_type='application/json')
+        data = json.loads(response.data)
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(data['success'])
+
+    def test_import_duplicate(self):
+        """测试导入已存在的番号"""
+        self.test_db.insert_av_info({
+            'av_id': 'IMP-DUP',
+            'title': '已存在',
+            'source': 'test'
+        })
+
+        response = self.client.post('/api/import',
+                                    json={'av_id': 'IMP-DUP', 'title': '重复'},
+                                    content_type='application/json')
+        data = json.loads(response.data)
+        self.assertEqual(response.status_code, 409)
+        self.assertFalse(data['success'])
 
     def test_search_av_multiple_ids(self):
         """测试批量搜索多个番号"""
