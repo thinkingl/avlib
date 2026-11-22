@@ -6,6 +6,7 @@ from scrapers.base import BaseScraper
 from scrapers.javbus import JavBusScraper
 from scrapers.javdb import JavDBScraper
 from scrapers.javlibrary import JavLibraryScraper
+from scrapers.dokuwiki import DokuWikiScraper
 
 class TestBaseScraper(unittest.TestCase):
     """爬虫基类测试"""
@@ -244,6 +245,85 @@ class TestJavLibraryScraper(unittest.TestCase):
     @patch.object(JavLibraryScraper, 'make_request')
     def test_search_not_found(self, mock_request):
         """测试搜索未找到结果"""
+        mock_request.return_value = None
+
+        result = self.scraper.search('NOT-EXIST')
+        self.assertIsNone(result)
+
+
+class TestDokuWikiScraper(unittest.TestCase):
+    """DokuWiki搜索源测试"""
+
+    def setUp(self):
+        self.scraper = DokuWikiScraper()
+        self.scraper.base_url = 'http://192.168.84.100/dokuwiki'
+
+    def test_get_source_name(self):
+        self.assertEqual(self.scraper.get_source_name(), 'dokuwiki')
+
+    @patch.object(DokuWikiScraper, 'make_request')
+    def test_search_success(self, mock_request):
+        """测试直接命中页面并解析字段"""
+        raw = '''====== IPX-782 测试标题 ======
+
+识别码:\tIPX-782  \\\\
+发行日期:\t2021-12-14  \\\\
+长度:\t120 分鍾  \\\\
+导演:\t赤井彗星  \\\\
+制作商:\tIDEA POCKET  \\\\
+发行商:\tテスト発行  \\\\
+系列:\t测试系列  \\\\
+网站评分:\t4.5  \\\\
+类别:\t單體作品 女上位  \\\\
+演员:\t明里つむぎ  \\\\
+评论:\t很好看  \\\\
+
+{{:av:2021-12-14-ipx-782.jpg|}}
+'''
+        mock_resp = MagicMock()
+        mock_resp.text = raw
+        mock_request.return_value = mock_resp
+
+        result = self.scraper.search('IPX-782')
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result['av_id'], 'IPX-782')
+        self.assertEqual(result['title'], 'IPX-782 测试标题')
+        self.assertEqual(result['release_date'], '2021-12-14')
+        self.assertEqual(result['duration'], '120 分鍾')
+        self.assertEqual(result['studio'], 'IDEA POCKET')
+        self.assertEqual(result['genres'], ['單體作品', '女上位'])
+        self.assertEqual(result['actresses'], ['明里つむぎ'])
+        self.assertEqual(result['comment'], '很好看')
+        self.assertIn('fetch.php?media=av:2021-12-14-ipx-782.jpg', result['cover_url'])
+
+    @patch.object(DokuWikiScraper, 'make_request')
+    def test_search_fallback_by_search(self, mock_request):
+        """测试直接页面不存在时通过搜索查找"""
+        # 第一次：直接页面不存在
+        not_found = MagicMock()
+        not_found.text = ''
+        # 第二次：搜索结果页
+        search_resp = MagicMock()
+        search_resp.text = '<a href="/dokuwiki/doku.php?id=av%3A2019-08-30-jvr100138" class="wikilink1">JVR100138</a>'
+        # 第三次：页面原始内容
+        raw_resp = MagicMock()
+        raw_resp.text = '''2019-08-30-JVR100138
+
+{{:av:2019-08-30-jvr100138.jpeg|}}
+'''
+        mock_request.side_effect = [not_found, search_resp, raw_resp]
+
+        result = self.scraper.search('JVR100138')
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result['av_id'], 'JVR100138')
+        self.assertEqual(result['title'], '2019-08-30-JVR100138')
+        self.assertIn('2019-08-30-jvr100138.jpeg', result['cover_url'])
+
+    @patch.object(DokuWikiScraper, 'make_request')
+    def test_search_not_found(self, mock_request):
+        """测试页面不存在且搜索无结果"""
         mock_request.return_value = None
 
         result = self.scraper.search('NOT-EXIST')

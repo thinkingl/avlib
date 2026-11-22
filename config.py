@@ -19,7 +19,7 @@ class Config:
     DOKUWIKI_API_TOKEN = os.environ.get('DOKUWIKI_API_TOKEN', '')
 
     # 爬虫配置
-    SCRAPERS = ['javdb', 'javbus']  # javdb优先，javbus有年龄验证问题
+    SCRAPERS = ['dokuwiki', 'javdb', 'javbus']  # dokuwiki为局域网已有数据源，最可靠
     REQUEST_TIMEOUT = 30
     REQUEST_DELAY = 1  # 请求间隔（秒）
 

@@ -7,7 +7,7 @@ import requests
 from flask import Flask, request, jsonify, render_template, Response
 from config import Config
 from database import Database
-from scrapers import JavBusScraper, JavDBScraper, JavLibraryScraper
+from scrapers import JavBusScraper, JavDBScraper, JavLibraryScraper, DokuWikiScraper
 from dokuwiki import DokuWikiClient, get_cover_filename
 from logger import logger
 
@@ -73,7 +73,8 @@ logger.info("数据库初始化完成")
 scrapers = {
     'javbus': JavBusScraper(),
     'javdb': JavDBScraper(),
-    'javlibrary': JavLibraryScraper()
+    'javlibrary': JavLibraryScraper(),
+    'dokuwiki': DokuWikiScraper()
 }
 logger.info(f"爬虫初始化完成: {list(scrapers.keys())}")
 
@@ -526,6 +527,8 @@ def update_config():
         _apply_settings(updates)
         for key, value in updates.items():
             setattr(dokuwiki_client, key.replace('dokuwiki_', ''), value)
+        if 'dokuwiki_url' in updates and 'dokuwiki' in scrapers:
+            scrapers['dokuwiki'].base_url = updates['dokuwiki_url'].rstrip('/')
         _save_settings(updates)
 
     return jsonify({
