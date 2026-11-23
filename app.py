@@ -7,7 +7,7 @@ import requests
 from flask import Flask, request, jsonify, render_template, Response
 from config import Config
 from database import Database
-from scrapers import JavBusScraper, JavDBScraper, JavLibraryScraper, DokuWikiScraper
+from scrapers import JavBusScraper, JavDBScraper, JavLibraryScraper, DokuWikiScraper, JvrPornScraper
 from dokuwiki import DokuWikiClient, get_cover_filename
 from logger import logger
 
@@ -74,7 +74,8 @@ scrapers = {
     'javbus': JavBusScraper(),
     'javdb': JavDBScraper(),
     'javlibrary': JavLibraryScraper(),
-    'dokuwiki': DokuWikiScraper()
+    'dokuwiki': DokuWikiScraper(),
+    'jvrporn': JvrPornScraper()
 }
 logger.info(f"爬虫初始化完成: {list(scrapers.keys())}")
 

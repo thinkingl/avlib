@@ -7,6 +7,7 @@ from scrapers.javbus import JavBusScraper
 from scrapers.javdb import JavDBScraper
 from scrapers.javlibrary import JavLibraryScraper
 from scrapers.dokuwiki import DokuWikiScraper
+from scrapers.jvrporn import JvrPornScraper
 
 class TestBaseScraper(unittest.TestCase):
     """爬虫基类测试"""
@@ -328,6 +329,76 @@ class TestDokuWikiScraper(unittest.TestCase):
 
         result = self.scraper.search('NOT-EXIST')
         self.assertIsNone(result)
+
+
+class TestJvrPornScraper(unittest.TestCase):
+    """JVRPorn搜索源测试"""
+
+    def setUp(self):
+        self.scraper = JvrPornScraper()
+
+    def test_get_source_name(self):
+        self.assertEqual(self.scraper.get_source_name(), 'jvrporn')
+
+    def test_extract_video_id(self):
+        self.assertEqual(self.scraper._extract_video_id('JVR100166'), '100166')
+        self.assertEqual(self.scraper._extract_video_id('JVR-100166'), '100166')
+        self.assertEqual(self.scraper._extract_video_id('jvr_100166'), '100166')
+        self.assertEqual(self.scraper._extract_video_id('100166'), '100166')
+        self.assertIsNone(self.scraper._extract_video_id('IPX-782'))
+
+    @patch.object(JvrPornScraper, 'make_request')
+    def test_search_success(self, mock_request):
+        """测试解析页面JSON-LD"""
+        html = '''<html><head>
+<meta property="og:image" content="https://media.jvrporn.com/v1/13,03eb0bfefd26?width=1280">
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[
+{"@type":"WebPage","name":"Two Naughty Girls Play with You | JVRPorn"},
+{"@type":"VideoObject","name":"Two Naughty Girls Play with You",
+ "actor":[{"@type":"Person","name":"Aya Miyazaki"},{"@type":"Person","name":"Umi Hirose"}],
+ "keywords":"threesome, Teen, Unsensored",
+ "uploadDate":"2020-03-14T17:13:51Z",
+ "thumbnailUrl":["https://media.jvrporn.com/v1/13,03eb0bfefd26?width=1280"]}
+]}</script>
+</head><body>
+<h1>Two Naughty Girls Play with You</h1>
+<section class="basic-info"><dl>
+<dt>Actress</dt><dd class="actor-links"><a href="/actress/100058/">Aya Miyazaki</a></dd>
+<dt>Total duration</dt><dd><strong>17:11</strong></dd>
+<dt>Tags</dt><dd class="tag-links"><a href="/tag/threesome/">threesome</a></dd>
+</dl></section>
+</body></html>'''
+
+        mock_resp = MagicMock()
+        mock_resp.text = html
+        mock_request.return_value = mock_resp
+
+        result = self.scraper.search('JVR100166')
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result['av_id'], 'JVR100166')
+        self.assertEqual(result['title'], 'Two Naughty Girls Play with You')
+        self.assertEqual(result['actresses'], ['Aya Miyazaki', 'Umi Hirose'])
+        self.assertEqual(result['genres'], ['threesome', 'Teen', 'Unsensored'])
+        self.assertEqual(result['release_date'], '2020-03-14')
+        self.assertEqual(result['duration'], '17:11')
+        self.assertEqual(result['studio'], 'JVRPorn')
+        self.assertIn('media.jvrporn.com', result['cover_url'])
+
+    @patch.object(JvrPornScraper, 'make_request')
+    def test_search_not_found(self, mock_request):
+        mock_request.return_value = None
+
+        result = self.scraper.search('JVR999999')
+        self.assertIsNone(result)
+
+    @patch.object(JvrPornScraper, 'make_request')
+    def test_search_non_jvr_id(self, mock_request):
+        """非JVR番号应直接跳过，不发请求"""
+        result = self.scraper.search('IPX-782')
+
+        self.assertIsNone(result)
+        mock_request.assert_not_called()
 
 
 if __name__ == '__main__':
